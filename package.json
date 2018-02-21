@@ -1,0 +1,39 @@
+{
+  "name": "webpack-lazy-dev-build",
+  "version": "1.0.0",
+  "description": "Build webpack chunks only when requested",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tfoxy/webpack-lazy-dev-build.git"
+  },
+  "keywords": [
+    "webpack",
+    "lazy",
+    "middleware",
+    "development",
+    "server",
+    "chunk"
+  ],
+  "author": "Tomás Fox <tomas.c.fox@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/tfoxy/webpack-lazy-dev-build/issues"
+  },
+  "homepage": "https://github.com/tfoxy/webpack-lazy-dev-build#readme",
+  "devDependencies": {
+    "babel-core": "^6.26.0",
+    "babel-loader": "^7.1.2",
+    "chai": "^4.1.2",
+    "express": "^4.16.2",
+    "mocha": "^4.1.0",
+    "mock-fs": "^4.4.2",
+    "sinon": "^4.3.0",
+    "supertest": "^3.0.0",
+    "webpack": "^3.11.0",
+    "webpack-dev-middleware": "^2.0.5"
+  }
+}
