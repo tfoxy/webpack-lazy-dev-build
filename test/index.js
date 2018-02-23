@@ -75,6 +75,24 @@ describe('LazyBuild', () => {
       await runCompiler(lazyCompiler);
       sinon.assert.callCount(dummyLoader.loader, 0);
     });
+
+    it('should block array entry from building', async () => {
+      const baseConfig = {
+        entry: ['/in1', '/in2'],
+        output: { filename: 'out.js', path: '/' },
+      };
+      const lazyBuild = new LazyBuild();
+      const baseCompiler = webpack(baseConfig);
+      const lazyCompiler = webpack({ ...baseConfig, plugins: [lazyBuild.plugin] });
+      mockFs({
+        '/in1.js': 'console.log("in1.js loaded")',
+        '/in2.js': 'console.log("in2.js loaded")',
+      });
+      const baseStats = await runCompiler(baseCompiler)
+      expect(baseStats.compilation.assets['out.js'].source()).to.not.include('No source available');
+      const lazyStats = await runCompiler(lazyCompiler)
+      expect(lazyStats.compilation.assets['out.js'].source()).to.include('No source available');
+    });
   });
 
   describe('Middleware', () => {

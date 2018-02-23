@@ -14,7 +14,7 @@ class LazyBuild {
       }
 
       const { context } = devMiddleware;
-      let filename = getFilenameFromUrl(context.options.publicPath, context.compiler, req.url);
+      const filename = getFilenameFromUrl(context.options.publicPath, context.compiler, req.url);
   
       if (filename === false) {
         return next();
@@ -34,7 +34,7 @@ class LazyBuild {
           if (!filteredChunks.length) return;
           filteredChunks.forEach((chunk) => {
             chunk.forEachModule((module) => {
-              this.neededModules.add(module.resource);
+              this.neededModules.add(module.resource || module.debugId);
             });
           });
           return true;
@@ -71,9 +71,10 @@ class WebpackLazyDevBuildPlugin {
   apply(compiler) {
     compiler.plugin('compilation', (compilation) => {
       compilation.plugin('build-module', (module) => {
-        if (this.lazyBuild.neededModules.has(module.resource)) return;
+        if (this.lazyBuild.neededModules.has(module.resource || module.debugId)) return;
         const isLazy = module.reasons.every((reason) => {
-          return reason.dependency.type === 'import()';
+          const { type } = reason.dependency;
+          return type === 'import()' || type === 'single entry';
         });
         if (isLazy) {
           module.building = [];
@@ -83,7 +84,7 @@ class WebpackLazyDevBuildPlugin {
             building.forEach(cb => cb());
           });
         } else {
-          this.lazyBuild.neededModules.add(module.resource);
+          this.lazyBuild.neededModules.add(module.resource || module.debugId);
         }
       });
     });
