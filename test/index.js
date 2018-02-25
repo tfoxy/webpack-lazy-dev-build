@@ -1,10 +1,11 @@
 const { expect } = require('chai');
 const sinon = require('sinon');
 const webpack = require('webpack');
-const mockFs = require('mock-fs');
 const request = require('supertest');
 const express = require('express');
 const WebpackDevMiddleware = require('webpack-dev-middleware');
+const ExtractTextPlugin = require("extract-text-webpack-plugin");
+const MemoryFS = require('memory-fs');
 const dummyLoader = require('./dummyLoader');
 const LazyBuild = require('..');
 
@@ -25,16 +26,19 @@ function runCompiler(compiler) {
   });
 }
 
+function setCompilerFs(compiler, fs) {
+  compiler.inputFileSystem = fs;
+  compiler.outputFileSystem = fs;
+  compiler.resolvers.normal.fileSystem = fs;
+  compiler.resolvers.context.fileSystem = fs;
+}
+
 describe('LazyBuild', () => {
   it('should be a function', () => {
     expect(LazyBuild).to.be.a('function');
   });
 
   describe('#plugin', () => {
-    afterEach(() => {
-      mockFs.restore();
-    });
-
     it('should block assets from building', async () => {
       const baseConfig = {
         entry: '/in',
@@ -43,10 +47,11 @@ describe('LazyBuild', () => {
       const lazyBuild = new LazyBuild();
       const baseCompiler = webpack(baseConfig);
       const lazyCompiler = webpack({ ...baseConfig, plugins: [lazyBuild.plugin] });
-      mockFs({
-        '/in.js': 'import("./1")',
-        '/1.js': 'console.log("1.js loaded")',
-      });
+      const fs = new MemoryFS();
+      fs.writeFileSync('/in.js', 'import("./1")', 'utf-8');
+      fs.writeFileSync('/1.js', 'console.log("1.js loaded")', 'utf-8');
+      setCompilerFs(baseCompiler, fs);
+      setCompilerFs(lazyCompiler, fs);
       const baseStats = await runCompiler(baseCompiler)
       expect(Object.keys(baseStats.compilation.assets)).to.have.length(2);
       const lazyStats = await runCompiler(lazyCompiler)
@@ -62,10 +67,10 @@ describe('LazyBuild', () => {
       const lazyBuild = new LazyBuild();
       const baseCompiler = webpack(baseConfig);
       const lazyCompiler = webpack({ ...baseConfig, plugins: [lazyBuild.plugin] });
-      mockFs({
-        '/in.js': 'console.log("in.js loaded")',
-        [dummyLoaderPath]: dummyLoaderContent,
-      });
+      const fs = new MemoryFS();
+      fs.writeFileSync('/in.js', 'console.log("in.js loaded")', 'utf-8');
+      setCompilerFs(baseCompiler, fs);
+      setCompilerFs(lazyCompiler, fs);
 
       dummyLoader.loader = sinon.spy(s => s);
       await runCompiler(baseCompiler);
@@ -84,10 +89,11 @@ describe('LazyBuild', () => {
       const lazyBuild = new LazyBuild();
       const baseCompiler = webpack(baseConfig);
       const lazyCompiler = webpack({ ...baseConfig, plugins: [lazyBuild.plugin] });
-      mockFs({
-        '/in1.js': 'console.log("in1.js loaded")',
-        '/in2.js': 'console.log("in2.js loaded")',
-      });
+      const fs = new MemoryFS();
+      fs.writeFileSync('/in1.js', 'console.log("in1.js loaded")', 'utf-8');
+      fs.writeFileSync('/in2.js', 'console.log("in2.js loaded")', 'utf-8');
+      setCompilerFs(baseCompiler, fs);
+      setCompilerFs(lazyCompiler, fs);
       const baseStats = await runCompiler(baseCompiler)
       expect(baseStats.compilation.assets['out.js'].source()).to.not.include('No source available');
       const lazyStats = await runCompiler(lazyCompiler)
@@ -96,36 +102,20 @@ describe('LazyBuild', () => {
   });
 
   describe('Middleware', () => {
-    let devMiddleware = null;
-
-    afterEach(() => {
-      devMiddleware = null;
-      mockFs.restore();
-    });
-
     function createAppRequest(webpackConfig, fsConfig) {
       const lazyBuild = new LazyBuild();
       const configs = Array.isArray(webpackConfig) ? webpackConfig : [webpackConfig];
-      let c = 0;
       configs.forEach((config) => {
         if (!config.plugins) config.plugins = [];
         config.plugins.push(lazyBuild.plugin);
-        config.plugins.push(function() {
-          this.plugin('watch-run', (compilation, done) => {
-            if (c++ === 0) {
-              mockFs(fsConfig);
-            }
-            done();
-          });
-          this.plugin('after-emit', (compilation, done) => {
-            if (--c === 0) {
-              mockFs.restore();
-            }
-            done();
-          });
-        });
       });
+      const fs = new MemoryFS();
+      for (filePath in fsConfig) {
+        fs.writeFileSync(filePath, fsConfig[filePath], 'utf-8');
+      }
       const compiler = webpack(webpackConfig);
+      const compilers = compiler.compilers || [compiler];
+      compilers.forEach((c) => setCompilerFs(c, fs));
       devMiddleware = WebpackDevMiddleware(compiler, {
         publicPath: !Array.isArray(webpackConfig) && webpackConfig.output.publicPath,
         logLevel: 'silent',
@@ -140,10 +130,9 @@ describe('LazyBuild', () => {
             const cStats = stats.stats ? stats.stats.find(s => s.compilation.errors.length) : stats;
             return reject(cStats.compilation.errors[0]);
           }
-          // mockFs.restore();
           resolve(appRequest);
         });
-      })
+      });
     }
 
     it('should respond 404 to path with no asset', async () => {
@@ -152,7 +141,7 @@ describe('LazyBuild', () => {
         output: { filename: '[name].js', path: '/' },
       }, {
         '/in.js': 'console.log("hello world")',
-      })
+      });
       await appRequest.get('/').expect(404);
     });
 
@@ -162,7 +151,7 @@ describe('LazyBuild', () => {
         output: { filename: '[name].js', path: '/' },
       }, {
         '/in.js': 'console.log("hello world")',
-      })
+      });
       await appRequest.get('/main.js').expect(200);
     });
 
@@ -172,7 +161,7 @@ describe('LazyBuild', () => {
         output: { filename: '[name].js', path: '/' },
       }, {
         '/in.js': 'console.log("hello world")',
-      })
+      });
       const res = await appRequest.get('/main.js');
       expect(res.text).to.not.include('No source available');
     });
@@ -183,7 +172,7 @@ describe('LazyBuild', () => {
         output: { filename: '[name].js', path: '/out', publicPath: '/out' },
       }, {
         '/in.js': 'console.log("hello world")',
-      })
+      });
       const res = await appRequest.get('/out/main.js').expect(200);
       expect(res.text).to.not.include('No source available');
     });
@@ -193,9 +182,9 @@ describe('LazyBuild', () => {
         entry: '/in',
         output: { filename: '[name].js', path: '/' },
       }, {
-        '/in.js': 'import("./1")',
-        '/1.js': 'console.log("1.js loaded")',
-      })
+        '/in.js': 'import("./in1")',
+        '/in1.js': 'console.log("in1.js loaded")',
+      });
       await appRequest.get('/1.js').expect(404);
     });
 
@@ -212,7 +201,7 @@ describe('LazyBuild', () => {
       }, {
         '/in.js': 'import("./1")',
         '/1.js': 'console.log("1.js loaded")',
-      })
+      });
       await appRequest.get('/main.js').expect(200);
       expect(assets).to.include('1.js');
     });
@@ -223,7 +212,7 @@ describe('LazyBuild', () => {
         output: { filename: '[name].js', path: '/', publicPath: '/public/' },
       }, {
         '/in.js': 'console.log("hello world")',
-      })
+      });
       return appRequest.get('/public/main.js').expect(200);
     });
 
@@ -240,7 +229,7 @@ describe('LazyBuild', () => {
       }, {
         '/in.js': 'import("./1")',
         '/1.js': 'console.log("1.js loaded")',
-      })
+      });
       await appRequest.get('/public/main.js').expect(200);
       expect(assets).to.include('1.js');
     });
@@ -260,7 +249,7 @@ describe('LazyBuild', () => {
         '/in2.js': 'import("./2")',
         '/1.js': 'console.log("1.js loaded")',
         '/2.js': 'console.log("2.js loaded")',
-      })
+      });
       await appRequest.get('/out1.js').expect(200);
       expect(assets).to.have.length(3);
     });
@@ -279,9 +268,32 @@ describe('LazyBuild', () => {
         '/in.js': 'import("./1")',
         '/1.js': 'import("./2")',
         '/2.js': 'console.log("2.js loaded")',
-      })
+      });
       await appRequest.get('/main.js').expect(200);
       expect(assets).to.have.length(2);
+    });
+
+    it('should process js file when requesting css file', async () => {
+      const extractTextPlugin = new ExtractTextPlugin('main.css');
+      const cssBody = 'body { background: red }';
+      const appRequest = await createAppRequest({
+        entry: '/in',
+        output: { filename: 'main.js', path: '/' },
+        module: {
+          rules: [
+            {
+              test: /\.css$/,
+              use: extractTextPlugin.extract({ use: ['raw-loader'] }),
+            },
+          ],
+        },
+        plugins: [extractTextPlugin],
+      }, {
+        '/in.js': 'import "./in.css";',
+        '/in.css': cssBody,
+      });
+      const res = await appRequest.get('/main.css').expect(200);
+      expect(res.text).to.equal(cssBody);
     });
 
     describe('multicompiler', () => {

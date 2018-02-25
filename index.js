@@ -1,4 +1,4 @@
-const { getFilenameFromUrl } = require('webpack-dev-middleware/lib/util');
+const { getFilenameFromUrl, handleRequest } = require('webpack-dev-middleware/lib/util');
 
 class LazyBuild {
   constructor() {
@@ -14,36 +14,52 @@ class LazyBuild {
       }
 
       const { context } = devMiddleware;
-      const filename = getFilenameFromUrl(context.options.publicPath, context.compiler, req.url);
-  
-      if (filename === false) {
+      const reqFilename = getFilenameFromUrl(context.options.publicPath, context.compiler, req.url);
+      if (reqFilename === false) {
         return next();
       }
 
-      if (context.webpackStats && !this.requestedFiles.has(filename)) {
-        this.requestedFiles.add(filename);
-        const stats = context.webpackStats.stats || [context.webpackStats];
-        const modifiedStats = stats.find(({ compilation }) => {
-          let { outputPath } = compilation.compiler;
-          if (!outputPath.endsWith('/')) outputPath += '/';
-          if (!filename.startsWith(outputPath)) return;
-          const chunkFilename = filename.slice(outputPath.length);
-          const filteredChunks = compilation.chunks.filter((chunk) => {
-            return chunk.files.includes(chunkFilename);
-          });
-          if (!filteredChunks.length) return;
-          filteredChunks.forEach((chunk) => {
-            chunk.forEachModule((module) => {
-              this.neededModules.add(module.resource || module.debugId);
+      const processFile = (filename) => {
+        if (context.webpackStats && !this.requestedFiles.has(filename)) {
+          this.requestedFiles.add(filename);
+          const stats = context.webpackStats.stats || [context.webpackStats];
+          const modifiedStats = stats.find(({ compilation }) => {
+            let { outputPath } = compilation.compiler;
+            if (!outputPath.endsWith('/')) outputPath += '/';
+            if (!filename.startsWith(outputPath)) return;
+            const chunkFilename = filename.slice(outputPath.length);
+            const filteredChunks = compilation.chunks.filter((chunk) => {
+              return chunk.files.includes(chunkFilename);
             });
+            if (!filteredChunks.length) return;
+            filteredChunks.forEach((chunk) => {
+              chunk.forEachModule((module) => {
+                this.neededModules.add(module.resource || module.debugId);
+              });
+            });
+            return true;
           });
-          return true;
-        });
-        if (modifiedStats) {
-          this._recompile(context, modifiedStats.compilation.compiler);
+          if (modifiedStats) {
+            this._recompile(context, modifiedStats.compilation.compiler);
+          }
+        }
+      };
+
+      const assetUrl = this.getAssetUrl(req.url);
+      if (assetUrl && assetUrl !== req.url) {
+        const assetFilename = getFilenameFromUrl(context.options.publicPath, context.compiler, assetUrl);
+        if (assetFilename !== false) {
+          const assetReq = Object.assign({}, req);
+          assetReq.url = assetUrl;
+          processFile(assetFilename);
+          return handleRequest(context, assetFilename, () => {
+            processFile(reqFilename);
+            return devMiddleware(req, res, next);
+          }, assetReq);
         }
       }
 
+      processFile(reqFilename);
       return devMiddleware(req, res, next);
     }
   }
@@ -60,6 +76,13 @@ class LazyBuild {
     compiler.contextTimestamps = timestamps;
 
     watching.invalidate();
+  }
+
+  getAssetUrl(url) {
+    if (url.endsWith('.css')) {
+      url = url.slice(0, -4) + '.js';
+    }
+    return url;
   }
 }
 
