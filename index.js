@@ -53,7 +53,7 @@ class LazyBuild {
           assetReq.url = assetUrl;
           processFile(assetFilename);
           return handleRequest(context, assetFilename, () => {
-            processFile(reqFilename);
+            this.requestedFiles.add(reqFilename);
             return devMiddleware(req, res, next);
           }, assetReq);
         }
