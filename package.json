@@ -35,6 +35,7 @@
     "sinon": "^4.3.0",
     "supertest": "^3.0.0",
     "webpack": "^3.11.0",
-    "webpack-dev-middleware": "^2.0.5"
+    "webpack-dev-middleware": "^2.0.5",
+    "webpackLatest": "npm:webpack@^4.6.0"
   }
 }
