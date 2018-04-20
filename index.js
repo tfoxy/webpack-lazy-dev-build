@@ -33,9 +33,9 @@ class LazyBuild {
             });
             if (!filteredChunks.length) return;
             filteredChunks.forEach((chunk) => {
-              chunk.forEachModule((module) => {
+              for (const module of chunk.modulesIterable) {
                 this.neededModules.add(module.resource || module.debugId);
-              });
+              }
             });
             return true;
           });
@@ -92,25 +92,53 @@ class WebpackLazyDevBuildPlugin {
   }
 
   apply(compiler) {
-    compiler.plugin('compilation', (compilation) => {
-      compilation.plugin('build-module', (module) => {
+    const hasHooks = Boolean(compiler.hooks);
+    const compilationCallback = (compilation) => {
+      const buildModuleCallback = (module) => {
         if (this.lazyBuild.neededModules.has(module.resource || module.debugId)) return;
         const isLazy = module.reasons.every((reason) => {
           const { type } = reason.dependency;
           return type === 'import()' || type === 'single entry';
         });
         if (isLazy) {
-          module.building = [];
-          setTimeout(() => {
-            const { building } = module;
-            module.building = undefined;
-            building.forEach(cb => cb());
-          });
+          if (hasHooks) {
+            const buildCopy = module.build;
+            module.build = () => {
+              module.buildMeta = {};
+              module.buildInfo = {
+                builtTime: Date.now(),
+                contextDependencies: module._contextDependencies,
+              };
+            };
+            setTimeout(() => {
+              const callbackList = compilation._buildingModules.get(module);
+              compilation._buildingModules.delete(module);
+              for (const cb of callbackList) cb();
+              module.build = buildCopy;
+            });
+          } else {
+            module.building = [];
+            setTimeout(() => {
+              const { building } = module;
+              module.building = undefined;
+              building.forEach(cb => cb());
+            });
+          }
         } else {
           this.lazyBuild.neededModules.add(module.resource || module.debugId);
         }
-      });
-    });
+      };
+      if (hasHooks) {
+        compilation.hooks.buildModule.tap('WebpackLazyDevBuildPlugin', buildModuleCallback);
+      } else {
+        compilation.plugin('build-module', buildModuleCallback);
+      }
+    };
+    if (hasHooks) {
+      compiler.hooks.compilation.tap('WebpackLazyDevBuildPlugin', compilationCallback);
+    } else {
+      compiler.plugin('compilation', compilationCallback);
+    }
   }
 }
 
