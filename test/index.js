@@ -302,28 +302,40 @@ function runTests(webpackPath) {
         await appRequest.get('/main.js').expect(200);
         expect(assets).to.have.length(2);
       });
-
-      describe('with css', () => {
-        it('should process js file when requesting css file', async () => {
-          const cssBody = 'body { background: red }';
-          const appRequest = await createAppRequest({
-            entry: '/in',
-            output: { filename: 'main.js', path: '/' },
-            module: {
-              rules: [
-                {
-                  test: /\.css$/,
-                  use: { loader: 'file-loader', options: { name: '[name].[ext]' } },
-                },
-              ],
-            },
-          }, {
-            '/in.js': 'import "./main.css";',
-            '/main.css': cssBody,
-          });
-          const res = await appRequest.get('/main.css').expect(200);
-          expect(res.text).to.equal(cssBody);
+  
+      it('should work with the CachePlugin', async () => {
+        let assets = [];
+        const appRequest = await createAppRequest({
+          entry: '/in',
+          output: { filename: '[name].js', path: '/' },
+          plugins: [new webpack.CachePlugin()],
+        }, {
+          '/in.js': '() => {import( /* webpackChunkName: "chunk" */ "./chunk")}',
+          '/chunk.js': 'import("./in")',
         });
+        await appRequest.get('/main.js').expect(200);
+        await appRequest.get('/chunk.js').expect(200);
+      });
+
+      it('should process js file when requesting css file', async () => {
+        const cssBody = 'body { background: red }';
+        const appRequest = await createAppRequest({
+          entry: '/in',
+          output: { filename: 'main.js', path: '/' },
+          module: {
+            rules: [
+              {
+                test: /\.css$/,
+                use: { loader: 'file-loader', options: { name: '[name].[ext]' } },
+              },
+            ],
+          },
+        }, {
+          '/in.js': 'import "./main.css";',
+          '/main.css': cssBody,
+        });
+        const res = await appRequest.get('/main.css').expect(200);
+        expect(res.text).to.equal(cssBody);
       });
   
       describe('multicompiler', () => {

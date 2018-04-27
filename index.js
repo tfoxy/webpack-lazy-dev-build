@@ -71,7 +71,10 @@ class LazyBuild {
     watching.pausedWatcher = watching.watcher;
     watching.watcher = null;
 
-    const timestamps = compiler.watchFileSystem.watcher.getTimes();    
+    let timestamps = compiler.watchFileSystem.watcher.getTimes();
+    if (compiler.hooks) {
+      timestamps = objectToMap(timestamps);
+    }
     compiler.fileTimestamps = timestamps;
     compiler.contextTimestamps = timestamps;
 
@@ -143,3 +146,14 @@ class WebpackLazyDevBuildPlugin {
 }
 
 module.exports = LazyBuild;
+
+/** Copied from webpack/lib/util/objectToMap.js (v4.6.0) */
+function objectToMap(obj) {
+	return new Map(
+		Object.keys(obj).map(key => {
+			/** @type {[string, string]} */
+			const pair = [key, obj[key]];
+			return pair;
+		})
+	);
+};
