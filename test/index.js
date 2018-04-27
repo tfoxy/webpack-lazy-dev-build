@@ -1,7 +1,5 @@
 const { expect } = require('chai');
 const sinon = require('sinon');
-// const webpackLatest = require('webpackLatest');
-// const webpackV3 = require('webpack');
 const request = require('supertest');
 const express = require('express');
 const WebpackDevMiddleware = require('webpack-dev-middleware');
@@ -12,8 +10,8 @@ const LazyBuild = require('..');
 const dummyLoaderPath = require.resolve('./dummyLoader');
 const dummyLoaderContent = `module.exports=${dummyLoader.toString()}`;
 
-runTests('webpackLatest');
-runTests('webpack'); // version ^3.11.0
+runTests('webpack-v4');
+runTests('webpack-v3');
 
 function runCompiler(compiler) {
   return new Promise((resolve, reject) => {
@@ -27,6 +25,17 @@ function runCompiler(compiler) {
       }
     });
   });
+}
+
+function createDonePlugin(doneCallback) {
+  return function() {
+    const hasHooks = Boolean(this.hooks);
+    if (hasHooks) {
+      this.hooks.done.tap('MyTestPlugin', doneCallback);
+    } else {
+      this.plugin('done', doneCallback);
+    }
+  };
 }
 
 function setCompilerFs(compiler, fs) {
@@ -75,7 +84,7 @@ function runTests(webpackPath) {
         expect(Object.keys(lazyStats.compilation.assets)).to.deep.equal(['out.js']);
       });
   
-      if (!webpack.version) {
+      if (!webpack.version) {  // version < 4.0.0
         it('should not run loader for entry file', async () => {
           const baseConfig = {
             entry: '/in',
@@ -125,8 +134,9 @@ function runTests(webpackPath) {
         const lazyBuild = new LazyBuild();
         const configs = Array.isArray(webpackConfig) ? webpackConfig : [webpackConfig];
         configs.forEach((config) => {
+          if (webpack.version) config.mode = 'none';
           if (!config.plugins) config.plugins = [];
-          config.plugins.push(lazyBuild.plugin);
+          config.plugins.push(lazyBuild.plugin, new webpack.NamedChunksPlugin());
         });
         const fs = new MemoryFS();
         for (filePath in fsConfig) {
@@ -212,17 +222,15 @@ function runTests(webpackPath) {
         const appRequest = await createAppRequest({
           entry: '/in',
           output: { filename: '[name].js', path: '/' },
-          plugins: [function() {
-            this.plugin('done', (stats) => {
-              assets = Object.keys(stats.compilation.assets);
-            });
-          }],
+          plugins: [createDonePlugin((stats) => {
+            assets = Object.keys(stats.compilation.assets);
+          })],
         }, {
-          '/in.js': 'import("./1")',
-          '/1.js': 'console.log("1.js loaded")',
+          '/in.js': 'import( /* webpackChunkName: "chunk" */ "./chunk")',
+          '/chunk.js': 'console.log("chunk.js loaded")',
         });
         await appRequest.get('/main.js').expect(200);
-        expect(assets).to.include('1.js');
+        expect(assets).to.include('chunk.js');
       });
   
       it('should respond 200 to path with asset when using publicPath', async () => {
@@ -240,17 +248,15 @@ function runTests(webpackPath) {
         const appRequest = await createAppRequest({
           entry: '/in',
           output: { filename: '[name].js', path: '/', publicPath: '/public/' },
-          plugins: [function() {
-            this.plugin('done', (stats) => {
-              assets = Object.keys(stats.compilation.assets);
-            });
-          }],
+          plugins: [createDonePlugin((stats) => {
+            assets = Object.keys(stats.compilation.assets);
+          })],
         }, {
-          '/in.js': 'import("./1")',
-          '/1.js': 'console.log("1.js loaded")',
+          '/in.js': 'import( /* webpackChunkName: "chunk" */ "./chunk")',
+          '/chunk.js': 'console.log("chunk.js loaded")',
         });
         await appRequest.get('/public/main.js').expect(200);
-        expect(assets).to.include('1.js');
+        expect(assets).to.include('chunk.js');
       });
   
       it('should not build child chunk of not requested entry', async () => {
@@ -258,11 +264,9 @@ function runTests(webpackPath) {
         const appRequest = await createAppRequest({
           entry: { out1: '/in1', out2: '/in2' },
           output: { filename: '[name].js', path: '/' },
-          plugins: [function() {
-            this.plugin('done', (stats) => {
-              assets = Object.keys(stats.compilation.assets);
-            });
-          }],
+          plugins: [createDonePlugin((stats) => {
+            assets = Object.keys(stats.compilation.assets);
+          })],
         }, {
           '/in1.js': 'import("./1")',
           '/in2.js': 'import("./2")',
@@ -278,11 +282,9 @@ function runTests(webpackPath) {
         const appRequest = await createAppRequest({
           entry: '/in',
           output: { filename: '[name].js', path: '/' },
-          plugins: [function() {
-            this.plugin('done', (stats) => {
-              assets = Object.keys(stats.compilation.assets);
-            });
-          }],
+          plugins: [createDonePlugin((stats) => {
+            assets = Object.keys(stats.compilation.assets);
+          })],
         }, {
           '/in.js': 'import("./1")',
           '/1.js': 'import("./2")',
@@ -295,22 +297,6 @@ function runTests(webpackPath) {
       describe('with css', () => {
         it('should process js file when requesting css file', async () => {
           const cssBody = 'body { background: red }';
-          let plugin;
-          let loader;
-          if (webpack.version) {
-            const MiniCssExtractPlugin = require('mini-css-extract-plugin');
-            plugin = new MiniCssExtractPlugin({ filename: 'main.css' });
-            loader = [
-              MiniCssExtractPlugin.loader,
-              'css-loader',
-            ];
-            // TODO fix test
-            return;
-          } else {
-            const ExtractTextPlugin = require('extract-text-webpack-plugin');
-            plugin = new ExtractTextPlugin('main.css');
-            loader = plugin.extract({ use: ['raw-loader'] });
-          }
           const appRequest = await createAppRequest({
             entry: '/in',
             output: { filename: 'main.js', path: '/' },
@@ -318,14 +304,13 @@ function runTests(webpackPath) {
               rules: [
                 {
                   test: /\.css$/,
-                  use: loader,
+                  use: { loader: 'file-loader', options: { name: '[name].[ext]' } },
                 },
               ],
             },
-            plugins: [plugin],
           }, {
-            '/in.js': 'import "./in.css";',
-            '/in.css': cssBody,
+            '/in.js': 'import "./main.css";',
+            '/main.css': cssBody,
           });
           const res = await appRequest.get('/main.css').expect(200);
           expect(res.text).to.equal(cssBody);
@@ -342,12 +327,10 @@ function runTests(webpackPath) {
           }, {
             entry: '/in2',
             output: { filename: '[name].js', path: '/out2/', publicPath: '/public2/' },
-            plugins: [function() {
-              this.plugin('done', (stats) => {
-                assets2 = Object.keys(stats.compilation.assets);
-                done2();
-              });
-            }],
+            plugins: [createDonePlugin((stats) => {
+              assets2 = Object.keys(stats.compilation.assets);
+              done2();
+            })],
           }], {
             '/in1.js': 'import("./1")',
             '/in2.js': 'import("./2")',
@@ -365,12 +348,10 @@ function runTests(webpackPath) {
           const appRequest = await createAppRequest([{
             entry: '/in1',
             output: { filename: '[name].js', path: '/out1/', publicPath: '/public1/' },
-            plugins: [function() {
-              this.plugin('done', (stats) => {
-                assets1 = Object.keys(stats.compilation.assets);
-                done1();
-              });
-            }],
+            plugins: [createDonePlugin((stats) => {
+              assets1 = Object.keys(stats.compilation.assets);
+              done1();
+            })],
           }, {
             entry: '/in2',
             output: { filename: '[name].js', path: '/out2/', publicPath: '/public2/' },
@@ -382,6 +363,7 @@ function runTests(webpackPath) {
           });
           const res = await appRequest.get('/public1/main.js').expect(200);
           expect(res.text).to.not.include('No source available');
+          sinon.assert.callCount(done1, 2);
           expect(assets1).to.have.length(2);
         });
       });

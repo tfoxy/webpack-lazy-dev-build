@@ -28,16 +28,14 @@
     "babel-core": "^6.26.0",
     "babel-loader": "^7.1.2",
     "chai": "^4.1.2",
-    "css-loader": "^0.28.11",
     "express": "^4.16.2",
-    "extract-text-webpack-plugin": "^3.0.2",
-    "mini-css-extract-plugin": "^0.4.0",
+    "file-loader": "^1.1.11",
     "mocha": "^4.1.0",
-    "raw-loader": "^0.5.1",
     "sinon": "^4.3.0",
     "supertest": "^3.0.0",
     "webpack": "^3.11.0",
     "webpack-dev-middleware": "^2.0.5",
-    "webpackLatest": "npm:webpack@^4.6.0"
+    "webpack-v3": "npm:webpack@^3.11.0",
+    "webpack-v4": "npm:webpack@^4.6.0"
   }
 }
