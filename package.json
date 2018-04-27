@@ -1,6 +1,6 @@
 {
   "name": "webpack-lazy-dev-build",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Build webpack chunks only when requested",
   "main": "index.js",
   "scripts": {
