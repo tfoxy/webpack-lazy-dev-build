@@ -130,6 +130,15 @@ function runTests(webpackPath) {
     });
   
     describe('Middleware', () => {
+      let devMiddleware = null;
+
+      afterEach((cb) => {
+        if (devMiddleware) {
+          devMiddleware.close(cb);
+          devMiddleware = null;
+        }
+      });
+
       function createAppRequest(webpackConfig, fsConfig) {
         const lazyBuild = new LazyBuild();
         const configs = Array.isArray(webpackConfig) ? webpackConfig : [webpackConfig];
