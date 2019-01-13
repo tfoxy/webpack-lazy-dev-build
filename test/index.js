@@ -2,7 +2,6 @@ const { expect } = require('chai');
 const sinon = require('sinon');
 const request = require('supertest');
 const express = require('express');
-const WebpackDevMiddleware = require('webpack-dev-middleware');
 const MemoryFS = require('memory-fs');
 const dummyLoader = require('./dummyLoader');
 const LazyBuild = require('..');
@@ -10,8 +9,8 @@ const LazyBuild = require('..');
 const dummyLoaderPath = require.resolve('./dummyLoader');
 const dummyLoaderContent = `module.exports=${dummyLoader.toString()}`;
 
-runTests('webpack-v4');
-runTests('webpack-v3');
+runTests('webpack-v4', 'webpack-dev-middleware');
+runTests('webpack-v3', 'webpack-dev-middleware-v2');
 
 function runCompiler(compiler) {
   return new Promise((resolve, reject) => {
@@ -45,8 +44,9 @@ function setCompilerFs(compiler, fs) {
   compiler.resolvers.context.fileSystem = fs;
 }
 
-function runTests(webpackPath) {
+function runTests(webpackPath, webpackDevMiddlewarePath) {
   const webpack = require(webpackPath);
+  const WebpackDevMiddleware = require(webpackDevMiddlewarePath);
 
   describe(`LazyBuild (webpack ${webpack.version || '3.11.0'})`, () => {
     let auxWebpackModule;

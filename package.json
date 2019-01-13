@@ -25,17 +25,16 @@
   },
   "homepage": "https://github.com/tfoxy/webpack-lazy-dev-build#readme",
   "devDependencies": {
-    "babel-core": "^6.26.0",
-    "babel-loader": "^7.1.2",
-    "chai": "^4.1.2",
-    "express": "^4.16.2",
-    "file-loader": "^1.1.11",
-    "mocha": "^4.1.0",
-    "sinon": "^4.3.0",
-    "supertest": "^3.0.0",
-    "webpack": "^3.11.0",
-    "webpack-dev-middleware": "^2.0.5",
-    "webpack-v3": "npm:webpack@^3.11.0",
-    "webpack-v4": "npm:webpack@^4.6.0"
+    "chai": "^4.2.0",
+    "express": "^4.16.4",
+    "file-loader": "^3.0.1",
+    "mocha": "^5.2.0",
+    "sinon": "^7.2.2",
+    "supertest": "^3.3.0",
+    "webpack": "^3.12.0",
+    "webpack-dev-middleware": "^3.5.0",
+    "webpack-dev-middleware-v2": "npm:webpack-dev-middleware@^2.0.6",
+    "webpack-v3": "npm:webpack@^3.12.0",
+    "webpack-v4": "npm:webpack@^4.28.4"
   }
 }
