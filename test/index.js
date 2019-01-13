@@ -64,7 +64,7 @@ function runTests(webpackPath) {
       expect(LazyBuild).to.be.a('function');
     });
   
-    describe('#plugin', () => {
+    describe('#lazyBuild', () => {
       it('should block assets from building', async () => {
         const baseConfig = {
           entry: '/in',
@@ -72,7 +72,7 @@ function runTests(webpackPath) {
         };
         const lazyBuild = new LazyBuild();
         const baseCompiler = webpack(baseConfig);
-        const lazyCompiler = webpack({ ...baseConfig, plugins: [lazyBuild.plugin] });
+        const lazyCompiler = webpack({ ...baseConfig, plugins: [lazyBuild.createPlugin()] });
         const fs = new MemoryFS();
         fs.writeFileSync('/in.js', 'import("./1")', 'utf-8');
         fs.writeFileSync('/1.js', 'console.log("1.js loaded")', 'utf-8');
@@ -93,7 +93,7 @@ function runTests(webpackPath) {
           };
           const lazyBuild = new LazyBuild();
           const baseCompiler = webpack(baseConfig);
-          const lazyCompiler = webpack({ ...baseConfig, plugins: [lazyBuild.plugin] });
+          const lazyCompiler = webpack({ ...baseConfig, plugins: [lazyBuild.createPlugin()] });
           const fs = new MemoryFS();
           fs.writeFileSync('/in.js', 'console.log("in.js loaded")', 'utf-8');
           setCompilerFs(baseCompiler, fs);
@@ -116,7 +116,7 @@ function runTests(webpackPath) {
         };
         const lazyBuild = new LazyBuild();
         const baseCompiler = webpack(baseConfig);
-        const lazyCompiler = webpack({ ...baseConfig, plugins: [lazyBuild.plugin] });
+        const lazyCompiler = webpack({ ...baseConfig, plugins: [lazyBuild.createPlugin()] });
         const fs = new MemoryFS();
         fs.writeFileSync('/in1.js', 'console.log("in1.js loaded")', 'utf-8');
         fs.writeFileSync('/in2.js', 'console.log("in2.js loaded")', 'utf-8');
@@ -145,7 +145,7 @@ function runTests(webpackPath) {
         configs.forEach((config) => {
           if (webpack.version) config.mode = 'none';
           if (!config.plugins) config.plugins = [];
-          config.plugins.push(lazyBuild.plugin, new webpack.NamedChunksPlugin());
+          config.plugins.push(lazyBuild.createPlugin(), new webpack.NamedChunksPlugin());
         });
         const fs = new MemoryFS();
         for (filePath in fsConfig) {

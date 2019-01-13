@@ -21,7 +21,7 @@ const LazyBuild = require('webpack-lazy-dev-build');
 const webpackConfig = require('./webpack.config');
 
 const lazyBuild = new LazyBuild();
-webpackConfig.plugins.push(lazyBuild.plugin);
+webpackConfig.plugins.push(lazyBuild.createPlugin());
 const compiler = webpack(webpackConfig);
 const devMiddleware = WebpackDevMiddleware(compiler);
 const app = express();

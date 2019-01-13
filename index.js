@@ -2,9 +2,20 @@ const { getFilenameFromUrl, handleRequest } = require('webpack-dev-middleware/li
 
 class LazyBuild {
   constructor() {
-    this.plugin = new WebpackLazyDevBuildPlugin(this);
     this.requestedFiles = new Set();
     this.neededModules = new Set();
+  }
+
+  get plugin() {
+    if (!this._plugin) {
+      console.warn('LazyBuild#plugin is deprecated. Please use #createPlugin() instead');
+      this._plugin = new WebpackLazyDevBuildPlugin(this);
+    }
+    return this._plugin;
+  }
+
+  createPlugin() {
+    return new WebpackLazyDevBuildPlugin(this);
   }
 
   createMiddleware(devMiddleware) {
